@@ -3,7 +3,7 @@
  * @Author     : itchaox
  * @Date       : 2023-09-26 15:10
  * @LastAuthor : itchaox
- * @LastTime   : 2023-12-14 23:39
+ * @LastTime   : 2023-12-30 10:06
  * @desc       : 
 -->
 <script setup>
@@ -11,6 +11,30 @@
   import { bitable, FieldType } from '@lark-base-open/js-sdk';
   import { ElMessage } from 'element-plus';
   import { addressCodeMap } from '@/addressCodeMap';
+
+  import axios from 'axios';
+
+  async function checkWebsite(url) {
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          'Access-Control-Allow-Origin': '*', // 允许所有域访问，不建议在生产环境中使用
+        },
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        console.log(`${url} 是有效的网址`);
+      } else {
+        console.log(`${url} 返回状态码为 ${response.status}，可能是失效的网址`);
+      }
+    } catch (error) {
+      console.error(`请求 ${url} 时发生错误:`, error.message);
+    }
+  }
+
+  // 示例：检测一个网站是否有效
+  checkWebsite('https://open.feishu.cn');
 
   const base = bitable.base;
 
@@ -84,128 +108,6 @@
     fieldOptions.value = tableMetaList.filter((item) => item.type === 1);
   });
 
-  // 根据身份证生成生日的信息
-  function extractBirthdayAndTimestamp(idCard) {
-    const year = parseInt(idCard.substring(6, 10), 10);
-    const month = parseInt(idCard.substring(10, 12), 10);
-    const day = parseInt(idCard.substring(12, 14), 10);
-    const timestamp = new Date(year, month - 1, day).getTime();
-
-    return {
-      year,
-      month,
-      day,
-      timestamp,
-    };
-  }
-
-  function calculateAgeFromTimestamp(birthTimestamp) {
-    const currentDate = new Date();
-    const birthDate = new Date(birthTimestamp);
-
-    const currentYear = currentDate.getFullYear();
-    const birthYear = birthDate.getFullYear();
-
-    let age = currentYear - birthYear;
-
-    // 检查生日是否已经过了今年
-    const currentMonth = currentDate.getMonth();
-    const birthMonth = birthDate.getMonth();
-
-    if (currentMonth < birthMonth || (currentMonth === birthMonth && currentDate.getDate() < birthDate.getDate())) {
-      age--;
-    }
-
-    return age;
-  }
-
-  /**
-   * @desc  : 校验身份证号码合法性
-   * @param  { string } idCard 身份证号码
-   * @return { object } 包含验证结果和可能的错误信息的对象
-   */
-  function checkIdCard(idCard) {
-    // 结果对象，包含是否合法和错误信息
-    const result = {
-      isValid: false,
-      errors: [],
-    };
-
-    // 校验身份证号码长度是否为18位（包括校验码）
-    if (idCard.length > 18) {
-      return {
-        isValid: false,
-        errorMessage: '长度大于18位',
-      };
-    }
-
-    if (idCard.length < 18) {
-      return {
-        isValid: false,
-        errorMessage: '长度小于18位',
-      };
-    }
-
-    const year = parseInt(idCard.substr(6, 2));
-    const isValidYear = year === 18 || year === 19 || year === 20;
-    // 校验年份是否合理
-    if (!isValidYear) {
-      result.errors.push('年份不合理');
-    }
-
-    const birthMonth = parseInt(idCard.substr(10, 2));
-    const isValidBirthMonth = birthMonth > 0 && birthMonth < 13;
-    // 校验月份是否合理
-    if (!isValidBirthMonth) {
-      result.errors.push('月份不合理');
-    }
-
-    const birthDay = parseInt(idCard.substr(12, 2), 10);
-    const isValidBirthDay = birthDay > 0 && birthDay < 32;
-    // 校验日期是否合理
-    if (!isValidBirthDay) {
-      result.errors.push('日期不合理');
-    }
-
-    // 权重因子和校验码映射
-    const weightedFactors = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
-    const checkCodeMap = [1, 0, 'X', 9, 8, 7, 6, 5, 4, 3, 2];
-
-    // 计算前17位的加权和
-    let sum = 0;
-    for (let i = 0; i < 17; i++) {
-      sum += parseInt(idCard.charAt(i), 10) * weightedFactors[i];
-    }
-
-    // 计算校验码
-    const mod = sum % 11;
-    const checkCode = checkCodeMap[mod];
-
-    // 校验身份证号码校验码是否正确
-    const isValidCheckCode = idCard.charAt(17) === checkCode + '';
-    if (!isValidCheckCode && isValidYear && isValidBirthMonth && isValidBirthDay) {
-      result.errors.push('其他类型格式错误');
-    }
-
-    // 正则表达式校验身份证号码格式
-    const regExp = /^[1-9]\d{5}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dX]$/;
-
-    if (!regExp.test(idCard) && isValidCheckCode && isValidYear && isValidBirthMonth && isValidBirthDay) {
-      result.errors.push('其他类型格式错误');
-    }
-
-    // 如果没有错误，将 isValid 设置为 true
-    if (result.errors.length === 0) {
-      result.isValid = true;
-    }
-
-    // 返回结果对象
-    return {
-      isValid: result.isValid,
-      errorMessage: result.errors.join('、'),
-    };
-  }
-
   /**
    * @desc  : 确认按钮
    */
@@ -229,17 +131,7 @@
 
     const asyncTasks = [];
 
-    const hasCheck = tableMetaList.find((item) => item.name === '身份证号码格式错误');
-    await asyncTasks.push(judgeCreate(hasCheck, '身份证号码格式错误', 'Text', generateCheckRow));
-
-    const conditions = [
-      { value: birthday.value, name: '生日', type: 'DateTime', func: generateBirthdayRow },
-      { value: age.value, name: '年龄', type: 'Number', func: generateAgeRow },
-      { value: sex.value, name: '性别', type: 'Text', func: generateSexRow },
-      { value: constellation.value, name: '星座', type: 'Text', func: generateConstellationRow },
-      { value: animal.value, name: '生肖', type: 'Text', func: generateAnimalRow },
-      { value: address.value, name: '籍贯', type: 'Text', func: generateAddressRow },
-    ];
+    const conditions = [{ value: sex.value, name: '性别', type: 'Text', func: generateSexRow }];
 
     conditions.forEach(({ value, name, type, func }) => {
       if (value) {
@@ -276,100 +168,6 @@
   }
 
   /**
-   * @desc  : 生成身份证号码格式错误列
-   */
-  async function generateCheckRow() {
-    const field = await table.getField('身份证号码格式错误');
-
-    let _list = [];
-    for (const record of recordList) {
-      const id = record.id;
-
-      // 获取索引
-      const index = recordList.recordIdList.findIndex((iId) => iId === id);
-      const cell = await record.getCellByField(fieldId.value);
-      const val = await cell.val;
-      if (!val) continue;
-
-      // FIXME 处理数据
-      _list.push({
-        recordId: recordIds[index],
-        fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid ? '' : checkIdCard(val[0]?.text).errorMessage,
-        },
-      });
-    }
-
-    // FIXME 此处一次性全部替换
-    await table.setRecords(_list);
-  }
-
-  /**
-   * @desc  : 生成生日列
-   */
-  async function generateBirthdayRow() {
-    const field = await table.getField('生日');
-    const view = await table.getActiveView();
-    await view.setFieldWidth(field.id, 100);
-
-    await field.setDateFormat(dateFormat.value);
-
-    let _list = [];
-    for (const record of recordList) {
-      const id = record.id;
-
-      // 获取索引
-      const index = recordList.recordIdList.findIndex((iId) => iId === id);
-      const cell = await record.getCellByField(fieldId.value);
-      const val = await cell.val;
-      if (!val) continue;
-
-      // FIXME 处理数据
-      _list.push({
-        recordId: recordIds[index],
-        fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid ? extractBirthdayAndTimestamp(val[0]?.text).timestamp : null,
-        },
-      });
-    }
-
-    // FIXME 此处一次性全部替换
-    await table.setRecords(_list);
-  }
-
-  /**
-   * @desc  : 生成年龄列
-   */
-  async function generateAgeRow() {
-    const field = await table.getField('年龄');
-    await field.setFormatter('0');
-
-    const view = await table.getActiveView();
-    await view.setFieldWidth(field.id, 20);
-
-    let _list = [];
-    for (const record of recordList) {
-      const id = record.id;
-      // 获取索引
-      const index = recordList.recordIdList.findIndex((iId) => iId === id);
-      const cell = await record.getCellByField(fieldId.value);
-      const val = await cell.val;
-      if (!val) continue;
-
-      // FIXME 处理数据
-      _list.push({
-        recordId: recordIds[index],
-        fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid
-            ? calculateAgeFromTimestamp(extractBirthdayAndTimestamp(val[0]?.text).timestamp)
-            : null,
-        },
-      });
-    }
-
-    await table.setRecords(_list);
-  }
-  /**
    * @desc  : 生成性别列
    */
   async function generateSexRow() {
@@ -386,17 +184,38 @@
       const val = await cell.val;
       if (!val) continue;
 
+      // console.log(await check404WithImage(val[0].link || val[0].text), '22222');
+      // console.log(await checkWebsite(val[0].link || val[0].text), '22222');
+
+      console.log(await checkLink(val[0].link || val[0].text), '333');
+
+      // let _code = await check404WithImage(val[0].link || val[0].text);
+      // let _code = await checkWebsite(val[0].link || val[0].text);
+
       // FIXME 处理数据
       _list.push({
         recordId: recordIds[index],
         fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid ? getGenderByIdCard(val[0]?.text) : null,
+          // [field.id]: checkIdCard(val[0]?.text).isValid ? getGenderByIdCard(val[0]?.text) : null,
+          // [field.id]: true ? getGenderByIdCard(val[0]?.text) : null,
+          [field.id]: _code === '404' ? '链接可能已经失效' : null,
         },
       });
     }
 
     // FIXME 此处一次性全部替换
     await table.setRecords(_list);
+  }
+
+  async function checkLink(url) {
+    linkCheck(url, function (err, result) {
+      if (err) {
+        console.error(err);
+        return;
+      }
+      console.log(`${result.link} is ${result.status}`);
+    });
+    console.log(results);
   }
 
   function getGenderByIdCard(idCard) {
@@ -405,158 +224,6 @@
 
     // 判断奇偶性来确定性别
     return checkCode % 2 === 0 ? '女' : '男';
-  }
-
-  /**
-   * @desc  : 生成星座列
-   */
-  async function generateConstellationRow() {
-    const field = await table.getField('星座');
-    const view = await table.getActiveView();
-    await view.setFieldWidth(field.id, 20);
-
-    let _list = [];
-    for (const record of recordList) {
-      const id = record.id;
-      // 获取索引
-      const index = recordList.recordIdList.findIndex((iId) => iId === id);
-      const cell = await record.getCellByField(fieldId.value);
-      const val = await cell.val;
-      if (!val) continue;
-
-      // FIXME 处理数据
-      _list.push({
-        recordId: recordIds[index],
-        fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid ? getConstellationByIdCard(val[0]?.text) : null,
-        },
-      });
-    }
-
-    // FIXME 此处一次性全部替换
-    await table.setRecords(_list);
-  }
-
-  function getConstellationByIdCard(idCard) {
-    const birthdayStr = idCard.substring(6, 14);
-    const birthday = new Date(
-      parseInt(birthdayStr.substring(0, 4)),
-      parseInt(birthdayStr.substring(4, 6)) - 1,
-      parseInt(birthdayStr.substring(6, 8)),
-    );
-
-    const month = birthday.getMonth() + 1;
-    const day = birthday.getDate();
-
-    const constellations = [
-      { name: '白羊座', startMonth: 3, startDay: 21, endMonth: 4, endDay: 19 },
-      { name: '金牛座', startMonth: 4, startDay: 20, endMonth: 5, endDay: 20 },
-      { name: '双子座', startMonth: 5, startDay: 21, endMonth: 6, endDay: 21 },
-      { name: '巨蟹座', startMonth: 6, startDay: 22, endMonth: 7, endDay: 22 },
-      { name: '狮子座', startMonth: 7, startDay: 23, endMonth: 8, endDay: 22 },
-      { name: '处女座', startMonth: 8, startDay: 23, endMonth: 9, endDay: 22 },
-      { name: '天秤座', startMonth: 9, startDay: 23, endMonth: 10, endDay: 23 },
-      { name: '天蝎座', startMonth: 10, startDay: 24, endMonth: 11, endDay: 22 },
-      { name: '射手座', startMonth: 11, startDay: 23, endMonth: 12, endDay: 21 },
-      { name: '摩羯座', startMonth: 12, startDay: 22, endMonth: 1, endDay: 19 },
-      { name: '水瓶座', startMonth: 1, startDay: 20, endMonth: 2, endDay: 18 },
-      { name: '双鱼座', startMonth: 2, startDay: 19, endMonth: 3, endDay: 20 },
-    ];
-
-    for (const constellation of constellations) {
-      if (
-        (month === constellation.startMonth && day >= constellation.startDay) ||
-        (month === constellation.endMonth && day <= constellation.endDay)
-      ) {
-        return constellation.name;
-      }
-    }
-
-    // 如果没有匹配的星座，返回空字符串或其他默认值
-    return '';
-  }
-
-  /**
-   * @desc  : 生成生肖列
-   */
-  async function generateAnimalRow() {
-    const field = await table.getField('生肖');
-    const view = await table.getActiveView();
-    await view.setFieldWidth(field.id, 20);
-
-    let _list = [];
-    for (const record of recordList) {
-      const id = record.id;
-      // 获取索引
-      const index = recordList.recordIdList.findIndex((iId) => iId === id);
-      const cell = await record.getCellByField(fieldId.value);
-      const val = await cell.val;
-      if (!val) continue;
-
-      // FIXME 处理数据
-      _list.push({
-        recordId: recordIds[index],
-        fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid ? getChineseZodiacByIdCard(val[0]?.text) : null,
-        },
-      });
-    }
-
-    // FIXME 此处一次性全部替换
-    await table.setRecords(_list);
-  }
-
-  function getChineseZodiacByIdCard(idCard) {
-    // 获取身份证中的年份
-    const year = parseInt(idCard.substring(6, 10));
-
-    // 生肖映射表
-    const zodiacMap = ['猴', '鸡', '狗', '猪', '鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊'];
-
-    // 计算生肖的索引
-    const zodiacIndex = year % 12;
-
-    // 返回对应的生肖
-    return zodiacMap[zodiacIndex];
-  }
-
-  /**
-   * @desc  : 生成籍贯列
-   */
-  async function generateAddressRow() {
-    const field = await table.getField('籍贯');
-
-    let _list = [];
-    for (const record of recordList) {
-      const id = record.id;
-      // 获取索引
-      const index = recordList.recordIdList.findIndex((iId) => iId === id);
-      const cell = await record.getCellByField(fieldId.value);
-      const val = await cell.val;
-      if (!val) continue;
-
-      // FIXME 处理数据
-      _list.push({
-        recordId: recordIds[index],
-        fields: {
-          [field.id]: checkIdCard(val[0]?.text).isValid ? getNativePlaceByIdCard(val[0]?.text) : null,
-        },
-      });
-    }
-
-    // FIXME 此处一次性全部替换
-    await table.setRecords(_list);
-  }
-
-  function getNativePlaceByIdCard(idCard) {
-    const provinceCode = idCard.substring(0, 2);
-    const countyCode = idCard.substring(0, 6);
-
-    // 根据省和县行政区划代码获取地址
-    const province = addressCodeMap.province[provinceCode] || '未知省份';
-    const county = addressCodeMap.county[countyCode] || '未知县区';
-
-    return `${province}${addressFormat.value}${county}`;
   }
 </script>
 
@@ -594,65 +261,8 @@
     <div class="row-tip">Tips: 表格中无对应信息列, 则会自动生成</div>
 
     <div class="switch">
-      <div class="switch-tip">生日</div>
-      <el-switch v-model="birthday" />
-    </div>
-    <div
-      v-if="birthday"
-      class="birthday"
-    >
-      <div class="title title-birthday">生日格式</div>
-      <div>
-        <el-select
-          v-model="dateFormat"
-          placeholder="请选择生日格式"
-        >
-          <el-option
-            v-for="item in dateFormatList"
-            :key="item.value"
-            :label="item.name"
-            :value="item.value"
-          />
-        </el-select>
-      </div>
-    </div>
-    <div class="switch">
-      <div class="switch-tip">年龄</div>
-      <el-switch v-model="age" />
-    </div>
-
-    <div class="switch">
       <div class="switch-tip">性别</div>
       <el-switch v-model="sex" />
-    </div>
-    <div class="switch">
-      <div class="switch-tip">星座</div>
-      <el-switch v-model="constellation" />
-    </div>
-    <div class="switch">
-      <div class="switch-tip">生肖</div>
-      <el-switch v-model="animal" />
-    </div>
-    <div class="switch">
-      <div class="switch-tip">籍贯</div>
-      <el-switch v-model="address" />
-    </div>
-    <div
-      v-if="address"
-      class="birthday"
-    >
-      <div class="title title-birthday">籍贯格式</div>
-      <el-select
-        v-model="addressFormat"
-        placeholder="请选择籍贯格式"
-      >
-        <el-option
-          v-for="item in addressFormatList"
-          :key="item.value"
-          :label="item.name"
-          :value="item.value"
-        />
-      </el-select>
     </div>
 
     <el-button
